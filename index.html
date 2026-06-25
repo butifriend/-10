@@ -210,19 +210,19 @@
 
         <div class="charts-grid">
             <div class="card">
-                <h3>오늘 누적 상태 및 건수</h3>
+                <h3>오늘 누적 상태 및 성공율</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="todayAccumChart"></canvas>
                 </div>
             </div>
             <div class="card">
-                <h3>이번주 누적 상태 및 건수</h3>
+                <h3>이번주 누적 상태 및 성공율</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="weekChart"></canvas>
                 </div>
             </div>
             <div class="card">
-                <h3>이번달 누적 상태 및 건수</h3>
+                <h3>이번달 누적 상태 및 성공율</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="monthChart"></canvas>
                 </div>
@@ -259,8 +259,7 @@
 
     let charts = {};
 
-    // 📊 건수 정보 가시성 확대를 위한 툴팁 기본 서식 지정
-    const baseChartOptions = (bottomText) => ({
+    const baseChartOptions = (centerText) => ({
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -271,15 +270,14 @@
             },
             title: {
                 display: true,
-                text: bottomText,
+                text: centerText,
                 position: 'bottom',
-                font: { size: 13, weight: 'bold' },
-                padding: { top: 15 }
+                font: { size: 14, weight: 'bold' }
             }
         }
     });
 
-    function updateDoughnutChart(chartId, ctxId, labels, data, bottomText) {
+    function updateDoughnutChart(chartId, ctxId, labels, data, successRateText) {
         if (charts[chartId]) {
             charts[chartId].destroy();
         }
@@ -293,7 +291,7 @@
                     backgroundColor: ['rgb(40, 130, 255)', 'rgb(185, 50, 255)'] 
                 }]
             },
-            options: baseChartOptions(bottomText)
+            options: baseChartOptions(successRateText)
         });
     }
 
@@ -307,6 +305,7 @@
         }).filter(row => row.length > 0 && row[0] !== "");
     }
 
+    // 🛠️ 시간대 왜곡을 완벽히 방지하는 날짜 파싱 (년, 월, 일 정수 추출)
     function parseDateParts(dateStr) {
         const parts = dateStr.split('-');
         if (parts.length === 3) {
@@ -316,6 +315,7 @@
                 day: parseInt(parts[2], 10)
             };
         }
+        // 슬래시 형태 대응
         const partsSlash = dateStr.split('/');
         if (partsSlash.length === 3) {
             return {
@@ -327,9 +327,11 @@
         return null;
     }
 
+    // 주차 계산 유틸리티 (일요일~토요일 기준 동일 주 판단)
     function getStartOfWeekDate(year, month, day) {
+        // 일시적 로컬 데이트 생성
         const d = new Date(year, month - 1, day);
-        const dayOfWeek = d.getDay(); 
+        const dayOfWeek = d.getDay(); // 0: 일요일, 6: 토요일
         d.setDate(d.getDate() - dayOfWeek);
         return {
             year: d.getFullYear(),
@@ -357,11 +359,13 @@
 
             const rows = rawRows.slice(1);
             
+            // 대시보드를 열고 있는 현재 시점의 날짜 정보 획득
             const now = new Date();
             const currentYear = now.getFullYear();
             const currentMonth = now.getMonth() + 1;
             const currentDay = now.getDate();
             
+            // 현재 주차의 시작일(일요일) 구하기
             const currentWeekStart = getStartOfWeekDate(currentYear, currentMonth, currentDay);
 
             let todayNormal = 0, todayError = 0;
@@ -388,6 +392,7 @@
                     lastStatus = statusStr;
                 }
 
+                // 1. 당일(오늘) 판단
                 if (targetParts.year === currentYear && targetParts.month === currentMonth && targetParts.day === currentDay) {
                     if (isNormal) todayNormal++; else todayError++;
                     
@@ -405,6 +410,7 @@
                     `;
                 }
                 
+                // 2. 이번주 판단 (대상 날짜의 주차 시작일이 현재 주차 시작일과 같을 때)
                 const targetWeekStart = getStartOfWeekDate(targetParts.year, targetParts.month, targetParts.day);
                 if (targetWeekStart.year === currentWeekStart.year && 
                     targetWeekStart.month === currentWeekStart.month && 
@@ -412,6 +418,7 @@
                     if (isNormal) weekNormal++; else weekError++;
                 }
                 
+                // 3. 이번달 판단
                 if (targetParts.year === currentYear && targetParts.month === currentMonth) {
                     if (isNormal) monthNormal++; else monthError++;
                 }
@@ -422,7 +429,6 @@
             }
             document.getElementById('log-tbody').innerHTML = tableHtml;
 
-            // 💡 오늘 정보 수치 결합
             const todayTotal = todayNormal + todayError;
             const todayRate = todayTotal > 0 ? Math.round((todayNormal / todayTotal) * 100) : 0;
 
@@ -433,22 +439,15 @@
             document.getElementById('meta-error').innerText = `${todayError} 건`;
             document.getElementById('meta-rate').innerText = `${todayRate}%`;
 
-            // 💡 이번주 정보 수치 결합
             const weekTotal = weekNormal + weekError;
             const weekRate = weekTotal > 0 ? Math.round((weekNormal / weekTotal) * 100) : 0;
 
-            // 💡 이번달 정보 수치 결합
             const monthTotal = monthNormal + monthError;
             const monthRate = monthTotal > 0 ? Math.round((monthNormal / monthTotal) * 100) : 0;
 
-            // 🛠️ 핵심 수정: 하단 텍스트에 성공율과 함께 [정상 OO건 / 오류 OO건] 포맷 실시간 주입
-            const todayText = `성공율: ${todayRate}% (정상 ${todayNormal}건 / 오류 ${todayError}건)`;
-            const weekText = `성공율: ${weekRate}% (정상 ${weekNormal}건 / 오류 ${weekError}건)`;
-            const monthText = `성공율: ${monthRate}% (정상 ${monthNormal}건 / 오류 ${monthError}건)`;
-
-            updateDoughnutChart('today', 'todayAccumChart', ['정상', '오류'], [todayNormal, todayError], todayText);
-            updateDoughnutChart('week', 'weekChart', ['정상', '오류'], [weekNormal, weekError], weekText);
-            updateDoughnutChart('month', 'monthChart', ['정상', '오류'], [monthNormal, monthError], monthText);
+            updateDoughnutChart('today', 'todayAccumChart', ['정상', '오류'], [todayNormal, todayError], `오늘 성공율: ${todayRate}%`);
+            updateDoughnutChart('week', 'weekChart', ['정상', '오류'], [weekNormal, weekError], `이번주 성공율: ${weekRate}%`);
+            updateDoughnutChart('month', 'monthChart', ['정상', '오류'], [monthNormal, monthError], `이번달 성공율: ${monthRate}%`);
 
         } catch (error) {
             console.error("데이터 동기화 실패:", error);
