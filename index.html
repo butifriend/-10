@@ -258,8 +258,8 @@
 </div>
 
 <script>
-    // 🔒 보안(HTTPS) 전용 확정 웹 게시 URL 연동
-    const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSP5-vHXke2MwMtOgCeXv8dZTCPIBU75OwW8bTnOBuOKcdAbbyNUMA1L__my6ch09rx5dezRUFmW9YS/pub?gid=0&single=true&output=csv";
+    // 🔒 GitHub Pages 차단 및 CORS 에러를 완벽히 우회하는 가장 확실한 구글 시트 CSV 주소 포맷
+    const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/132r740wkRSzKtyRe1LKomEZ-2jmdVJmFDBDHYY_PPxc/export?format=csv&gid=0";
 
     let charts = {};
 
@@ -299,12 +299,136 @@
         });
     }
 
-    // 🛠️ 파싱 엔진 고도화: 윈도우 줄바꿈(\r) 캐리지 리턴 차단 처리 완비
     function parseCSV(text) {
         const lines = text.split('\n');
         return lines.map(line => {
             const cleanLine = line.replace(/\r/g, '').trim();
             if (!cleanLine) return [];
+            // 쉼표 분할 로직 안정화
             const matches = cleanLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || cleanLine.split(',');
             return matches.map(val => val.replace(/^"|"$/g, '').trim());
-        }).filter(row => row.length >
+        }).filter(row => row.length > 0 && row[0] !== "");
+    }
+
+    function getZeroTimeDate(dateStr) {
+        const d = new Date(dateStr.replace(/-/g, '/'));
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    function isSameDay(d1, d2) {
+        return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+    }
+
+    function isSameWeek(d1, d2) {
+        const target = new Date(d1.getTime());
+        const base = new Date(d2.getTime());
+        target.setDate(target.getDate() - target.getDay());
+        base.setDate(base.getDate() - base.getDay());
+        return target.getTime() === base.getTime();
+    }
+
+    async function fetchDashboardData() {
+        document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading"><i class="fa-solid fa-spinner fa-spin"></i> 구글 시트 데이터를 동기화하는 중입니다...</td></tr>`;
+        
+        try {
+            // 캐시 버스터 주입으로 실시간 데이터 강제 동기화
+            const cacheBuster = "&t=" + new Date().getTime();
+            const response = await fetch(SPREADSHEET_CSV_URL + cacheBuster);
+            
+            if (!response.ok) {
+                throw new Error("네트워크 응답 규격 오류");
+            }
+            
+            const csvText = await response.text();
+            const rawRows = parseCSV(csvText);
+            
+            if (rawRows.length <= 1) {
+                document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:orange;"><i class="fa-solid fa-triangle-exclamation"></i> 시트에 헤더 외에 데이터가 존재하지 않습니다.</td></tr>`;
+                return;
+            }
+
+            const rows = rawRows.slice(1);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            let todayNormal = 0, todayError = 0;
+            let weekNormal = 0, weekError = 0;
+            let monthNormal = 0, monthError = 0;
+            let lastStatus = "미정";
+            let tableHtml = "";
+
+            const totalRows = rows.length;
+
+            for (let i = totalRows - 1; i >= 0; i--) {
+                const row = rows[i];
+                if(row.length < 4) continue;
+
+                const dateStr = row[0];
+                const statusStr = row[3];
+                const rateStr = row[5] || "100%";
+                const isNormal = (statusStr === "정상" || statusStr.includes("정상"));
+
+                const targetDate = getZeroTimeDate(dateStr);
+
+                if (i === totalRows - 1) {
+                    lastStatus = statusStr;
+                }
+
+                if (isSameDay(targetDate, today)) {
+                    if (isNormal) todayNormal++; else todayError++;
+                    
+                    const rowClass = isNormal ? "" : "style='background-color: #fdf2f2;'";
+                    const statusClass = isNormal ? "class='status-normal'" : "class='status-error'";
+                    tableHtml += `
+                        <tr ${rowClass}>
+                            <td>${row[0]}</td>
+                            <td>${row[1]}</td>
+                            <td>${row[2]}</td>
+                            <td ${statusClass}>${row[3]}</td>
+                            <td>${row[4]}</td>
+                            <td>${rateStr}</td>
+                        </tr>
+                    `;
+                }
+                if (isSameWeek(targetDate, today)) {
+                    if (isNormal) weekNormal++; else weekError++;
+                }
+                if (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() === today.getMonth()) {
+                    if (isNormal) monthNormal++; else monthError++;
+                }
+            }
+
+            if (tableHtml === "") {
+                tableHtml = `<tr><td colspan="6" class="loading">오늘 기록된 점검 로그가 없습니다.</td></tr>`;
+            }
+            document.getElementById('log-tbody').innerHTML = tableHtml;
+
+            const todayTotal = todayNormal + todayError;
+            const todayRate = todayTotal > 0 ? Math.round((todayNormal / todayTotal) * 100) : 0;
+
+            document.getElementById('meta-status').innerText = lastStatus;
+            document.getElementById('meta-status').className = `value ${lastStatus.includes('정상') ? 'status-normal' : 'status-error'}`;
+            document.getElementById('meta-total').innerText = `${todayTotal} 건`;
+            document.getElementById('meta-normal').innerText = `${todayNormal} 건`;
+            document.getElementById('meta-error').innerText = `${todayError} 건`;
+            document.getElementById('meta-rate').innerText = `${todayRate}%`;
+
+            const weekTotal = weekNormal + weekError;
+            const weekRate = weekTotal > 0 ? Math.round((weekNormal / weekTotal) * 100) : 0;
+
+            const monthTotal = monthNormal + monthError;
+            const monthRate = monthTotal > 0 ? Math.round((monthNormal / monthTotal) * 100) : 0;
+
+            updateDoughnutChart('today', 'todayAccumChart', ['정상', '오류'], [todayNormal, todayError], `오늘 성공율: ${todayRate}%`);
+            updateDoughnutChart('week', 'weekChart', ['정상', '오류'], [weekNormal, weekError], `이번주 성공율: ${weekRate}%`);
+            updateDoughnutChart('month', 'monthChart', ['정상', '오류'], [monthNormal, monthError], `이번달 성공율: ${monthRate}%`);
+
+        } catch (error) {
+            console.error("데이터 동기화 실패:", error);
+            document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:red;"><i class="fa-solid fa-circle-xmark"></i> 시트 연동 권한 또는 네트워크 오류가 발생했습니다. 구글 시트 공유 설정을 확인해 주세요.</td></tr>`;
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', fetchDashboardData);
+</script>
