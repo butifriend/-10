@@ -12,8 +12,8 @@
             --bg-color: #ffffff;
             --card-bg: #f8f9fa;
             --accent-color: #007bff;
-            --success-color: rgb(40, 130, 255); /* 변경 요청 정상 컬러 */
-            --danger-color: rgb(185, 50, 255);  /* 변경 요청 오류 컬러 */
+            --success-color: rgb(40, 130, 255); 
+            --danger-color: rgb(185, 50, 255);  
             --text-color: #333333;
             --text-muted: #6c757d;
             --border-color: #dee2e6;
@@ -38,11 +38,63 @@
             align-items: center;
             border-bottom: 2px solid var(--border-color);
             padding-bottom: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
         h1 { margin: 0; font-size: 28px; font-weight: 700; color: #111; }
         h1 span { color: var(--accent-color); }
+
+        .top-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            background-color: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: #ffffff;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background-color: #f1f3f5;
+        }
+
+        .btn-filter.active {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border-color: var(--accent-color);
+        }
+
+        .btn-refresh {
+            background-color: #212529;
+            color: #ffffff;
+            border-color: #212529;
+        }
+
+        .btn-refresh:hover {
+            background-color: #000000;
+        }
 
         .metrics-grid {
             display: grid;
@@ -51,7 +103,6 @@
             margin-bottom: 30px;
         }
 
-        /* 도넛 차트 3개가 나란히 배치되는 3열 그리드 구조 */
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -126,6 +177,14 @@
             font-size: 18px;
             color: var(--text-muted);
         }
+
+        @media print {
+            body { padding: 10px; background: #fff; }
+            .top-controls { display: none !important; } 
+            .card { box-shadow: none !important; border: 1px solid #ccc !important; page-break-inside: avoid; }
+            .charts-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 10px !important; }
+            .metrics-grid { grid-template-columns: repeat(5, 1fr) !important; gap: 10px !important; }
+        }
     </style>
 </head>
 <body>
@@ -133,18 +192,30 @@
 <div class="container">
     <header>
         <h1><span>Amaranth10</span> 이용가이드 대시보드</h1>
-        <!-- 지시사항: '로컬 테스트 모드' 영역 완전 제거 -->
     </header>
 
+    <div class="top-controls">
+        <div class="btn-group">
+            <button class="btn btn-filter active" onclick="changePeriod('month')"><i class="fa-solid fa-calendar-days"></i> 당월 조회</button>
+            <button class="btn btn-filter" onclick="changePeriod('year')"><i class="fa-solid fa-calendar"></i> 당해 조회</button>
+            <button class="btn btn-filter" onclick="changePeriod('all')"><i class="fa-solid fa-database"></i> 전체 기간 조회</button>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn" onclick="window.print()"><i class="fa-solid fa-file-pdf" style="color: #e4a11b;"></i> PDF 저장</button>
+            <button class="btn" onclick="window.print()"><i class="fa-solid fa-print"></i> 인쇄</button>
+            <button class="btn btn-refresh" onclick="fetchDashboardData()"><i class="fa-solid fa-arrows-rotate"></i> 새로고침</button>
+        </div>
+    </div>
+
     <div id="dashboard-view">
-        <!-- 상단 동적 지표 카드 블록 -->
         <div class="metrics-grid">
             <div class="card" style="border-top: 4px solid var(--success-color);">
                 <h3>최근 점검 상태</h3>
                 <div class="value" id="meta-status">-</div>
             </div>
             <div class="card" style="border-top: 4px solid #6c757d;">
-                <h3>오늘 점검 총 건수</h3>
+                <h3 id="label-total">당월 점검 총 건수</h3>
                 <div class="value" id="meta-total">-</div>
             </div>
             <div class="card" style="border-top: 4px solid var(--success-color);">
@@ -161,32 +232,30 @@
             </div>
         </div>
 
-        <!-- 중앙 도넛 차트 3열 배치 영역 -->
         <div class="charts-grid">
             <div class="card">
-                <h3>오늘 누적 상태 및 성공율</h3>
+                <h3>오늘 누적 상태 및 건수</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="todayAccumChart"></canvas>
                 </div>
             </div>
             <div class="card">
-                <h3>이번주 누적 상태 및 성공율</h3>
+                <h3>이번주 누적 상태 및 건수</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="weekChart"></canvas>
                 </div>
             </div>
             <div class="card">
-                <h3>이번달 누적 상태 및 성공율</h3>
+                <h3>이번달 누적 상태 및 건수</h3>
                 <div style="height: 200px; position: relative;">
                     <canvas id="monthChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- 하단 실시간 점검 로그 리스트 -->
         <div class="dashboard-grid">
             <div class="card">
-                <h3>오늘 기준 점검 로그 리스트 (최신순)</h3>
+                <h3 id="table-title">당월 기준 점검 로그 리스트 (최신순)</h3>
                 <div class="table-container">
                     <table id="log-table">
                         <thead>
@@ -210,14 +279,13 @@
 </div>
 
 <script>
-    // ⚠️ [필수 선행 작업] 구글 스프레드시트 파일 -> 메뉴의 '파일' -> '공유' -> '웹에 게시' 클릭
-    // ⚠️ 링크 형식을 전체 문서 기준 '쉼표로 구분된 값(.csv)'으로 설정 후 게시 버튼을 누르고 아래 URL에 할당하세요.
-    const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSP5-vHXke2MwMtOgCeXv8dZTCPIBU75OwW8bTnOBuOKcdAbbyNUMA1L__my6ch09rx5dezRUFmW9YS/pub?gid=0&single=true&output=csv";
+    const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/132r740wkRSzKtyRe1LKomEZ-2jmdVJmFDBDHYY_PPxc/export?format=csv&gid=0";
 
     let charts = {};
+    let globalCachedRows = []; 
+    let currentPeriod = 'month'; // 기본 로드 범위: 당월 조회
 
-    // 공통 차트 가시성 옵션
-    const baseChartOptions = (centerText) => ({
+    const baseChartOptions = (bottomText) => ({
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -228,15 +296,15 @@
             },
             title: {
                 display: true,
-                text: centerText,
+                text: bottomText,
                 position: 'bottom',
-                font: { size: 14, weight: 'bold' }
+                font: { size: 13, weight: 'bold' },
+                padding: { top: 15 }
             }
         }
     });
 
-    // 도넛 차트 생성 및 갱신 전용 핸들러
-    function updateDoughnutChart(chartId, ctxId, labels, data, successRateText) {
+    function updateDoughnutChart(chartId, ctxId, labels, data, bottomText) {
         if (charts[chartId]) {
             charts[chartId].destroy();
         }
@@ -247,150 +315,207 @@
                 labels: labels,
                 datasets: [{
                     data: data,
-                    backgroundColor: ['rgb(40, 130, 255)', 'rgb(185, 50, 255)'] // 지정 RGB 반영
+                    backgroundColor: ['rgb(40, 130, 255)', 'rgb(185, 50, 255)'] 
                 }]
             },
-            options: baseChartOptions(successRateText)
+            options: baseChartOptions(bottomText)
         });
     }
 
-    // CSV 파싱 엔진 함수
     function parseCSV(text) {
         const lines = text.split('\n');
         return lines.map(line => {
-            // 따옴표 내부의 콤마를 보호하며 분할 처리
-            const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
-            return matches.map(val => val.replace(/^"|"$/g, '').trim());
-        }).filter(row => row.length > 0 && row[0] !== "");
+            const cleanLine = line.replace(/\r/g, '').trim();
+            if (!cleanLine) return [];
+            
+            // 따옴표(쉼표 포함된 텍스트 처리) 파싱 지원 보강
+            let result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < cleanLine.length; i++) {
+                let char = cleanLine[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }).filter(row => row.length > 0 && row[0] !== "" && row[0] !== "날짜");
     }
 
-    // 날짜 연산을 위한 유틸리티 함수 그룹
-    function getParsedDate(dateStr) {
-        return new Date(dateStr.replace(/-/g, '/'));
+    function parseDateParts(dateStr) {
+        if(!dateStr) return null;
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10) };
+        }
+        const partsSlash = dateStr.split('/');
+        if (partsSlash.length === 3) {
+            return { year: parseInt(partsSlash[0], 10), month: parseInt(partsSlash[1], 10), day: parseInt(partsSlash[2], 10) };
+        }
+        return null;
     }
 
-    function isSameDay(d1, d2) {
-        return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+    function getStartOfWeekDate(year, month, day) {
+        const d = new Date(year, month - 1, day);
+        const dayOfWeek = d.getDay(); 
+        d.setDate(d.getDate() - dayOfWeek);
+        return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
     }
 
-    function isSameWeek(d1, d2) {
-        const oneDay = 24 * 60 * 60 * 1000;
-        const diff = Math.abs(d1 - d2);
-        if (diff > 7 * oneDay) return false;
-        // 같은 주차 내에 있는 기한 가늠 (일요일 주차 기준 단순 비교 보완)
-        const d1Week = Math.floor(d1.getTime() / (7 * oneDay));
-        const d2Week = Math.floor(d2.getTime() / (7 * oneDay));
-        return d1.getMonth() === d2.getMonth(); 
-    }
-
-    // 실시간 시트 데이터 스트리밍 연동 로직
-    async function fetchDashboardData() {
-        if (SPREADSHEET_CSV_URL === "YOUR_GOOGLE_SHEET_CSV_URL_HERE") {
-            document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:red;"><i class="fa-solid fa-triangle-exclamation"></i> SPREADSHEET_CSV_URL 변수에 구글 웹 게시 주소를 입력해주세요.</td></tr>`;
-            return;
+    // 🎛️ 상단 버튼 클릭 핸들러
+    function changePeriod(period) {
+        currentPeriod = period;
+        
+        const buttons = document.querySelectorAll('.btn-filter');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        
+        const indexMap = { 'month': 0, 'year': 1, 'all': 2 };
+        if(buttons[indexMap[period]]) {
+            buttons[indexMap[period]].classList.add('active');
         }
 
+        const textMap = { 'month': '당월', 'year': '당해', 'all': '전체 기간' };
+        document.getElementById('label-total').innerText = `${textMap[period]} 점검 총 건수`;
+        document.getElementById('table-title').innerText = `${textMap[period]} 기준 점검 로그 리스트 (최신순)`;
+
+        if (globalCachedRows.length > 0) {
+            renderDashboard(globalCachedRows);
+        }
+    }
+
+    function renderDashboard(rows) {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const currentDay = now.getDate();
+        const currentWeekStart = getStartOfWeekDate(currentYear, currentMonth, currentDay);
+
+        let todayNormal = 0, todayError = 0;
+        let weekNormal = 0, weekError = 0;
+        let monthNormal = 0, monthError = 0;
+
+        let filterNormal = 0, filterError = 0;
+        let lastStatus = "미정";
+        let tableHtml = "";
+
+        const totalRows = rows.length;
+
+        for (let i = totalRows - 1; i >= 0; i--) {
+            const row = rows[i];
+            if(row.length < 4) continue;
+
+            const dateStr = row[0];
+            const statusStr = row[3];
+            const rateStr = row[5] || "100%";
+            const isNormal = (statusStr === "정상" || statusStr.includes("정상"));
+
+            const targetParts = parseDateParts(dateStr);
+            if (!targetParts) continue;
+
+            if (i === totalRows - 1) {
+                lastStatus = statusStr;
+            }
+
+            // 고정 시계열 차트 통계 연산
+            const isToday = (targetParts.year === currentYear && targetParts.month === currentMonth && targetParts.day === currentDay);
+            if (isToday) { if (isNormal) todayNormal++; else todayError++; }
+            
+            const targetWeekStart = getStartOfWeekDate(targetParts.year, targetParts.month, targetParts.day);
+            const isWeek = (targetWeekStart.year === currentWeekStart.year && targetWeekStart.month === currentWeekStart.month && targetWeekStart.day === currentWeekStart.day);
+            if (isWeek) { if (isNormal) weekNormal++; else weekError++; }
+            
+            const isMonth = (targetParts.year === currentYear && targetParts.month === currentMonth);
+            if (isMonth) { if (isNormal) monthNormal++; else monthError++; }
+
+            // 🎛️ 상단 기간 필터 매칭 로직
+            let isMatched = false;
+            if (currentPeriod === 'month' && isMonth) isMatched = true;
+            else if (currentPeriod === 'year' && targetParts.year === currentYear) isMatched = true;
+            else if (currentPeriod === 'all') isMatched = true;
+
+            if (isMatched) {
+                if (isNormal) filterNormal++; else filterError++;
+                
+                const rowClass = isNormal ? "" : "style='background-color: #fdf2f2;'";
+                const statusClass = isNormal ? "class='status-normal'" : "class='status-error'";
+                tableHtml += `
+                    <tr ${rowClass}>
+                        <td>${row[0]}</td>
+                        <td>${row[1]}</td>
+                        <td>${row[2]}</td>
+                        <td ${statusClass}>${row[3]}</td>
+                        <td>${row[4]}</td>
+                        <td>${rateStr}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        if (tableHtml === "") {
+            tableHtml = `<tr><td colspan="6" class="loading">해당 기간 내에 기록된 점검 로그가 없습니다.</td></tr>`;
+        }
+        document.getElementById('log-tbody').innerHTML = tableHtml;
+
+        // 선택 조건 기준 상단 스코어 렌더링
+        const filterTotal = filterNormal + filterError;
+        const filterRate = filterTotal > 0 ? Math.round((filterNormal / filterTotal) * 100) : 0;
+
+        document.getElementById('meta-status').innerText = lastStatus;
+        document.getElementById('meta-status').className = `value ${lastStatus.includes('정상') ? 'status-normal' : 'status-error'}`;
+        document.getElementById('meta-total').innerText = `${filterTotal} 건`;
+        document.getElementById('meta-normal').innerText = `${filterNormal} 건`;
+        document.getElementById('meta-error').innerText = `${filterError} 건`;
+        document.getElementById('meta-rate').innerText = `${filterRate}%`;
+
+        // 하단 차트 수치 빌드 및 동적 주입 (건수 결합 완료)
+        const todayTotal = todayNormal + todayError;
+        const todayRate = todayTotal > 0 ? Math.round((todayNormal / todayTotal) * 100) : 0;
+        const weekTotal = weekNormal + weekError;
+        const weekRate = weekTotal > 0 ? Math.round((weekNormal / weekTotal) * 100) : 0;
+        const monthTotal = monthNormal + monthError;
+        const monthRate = monthTotal > 0 ? Math.round((monthNormal / monthTotal) * 100) : 0;
+
+        const todayText = `성공율: ${todayRate}% (정상 ${todayNormal}건 / 오류 ${todayError}건)`;
+        const weekText = `성공율: ${weekRate}% (정상 ${weekNormal}건 / 오류 ${weekError}건)`;
+        const monthText = `성공율: ${monthRate}% (정상 ${monthNormal}건 / 오류 ${monthError}건)`;
+
+        updateDoughnutChart('today', 'todayAccumChart', ['정상', '오류'], [todayNormal, todayError], todayText);
+        updateDoughnutChart('week', 'weekChart', ['정상', '오류'], [weekNormal, weekError], weekText);
+        updateDoughnutChart('month', 'monthChart', ['정상', '오류'], [monthNormal, monthError], monthText);
+    }
+
+    async function fetchDashboardData() {
+        document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading"><i class="fa-solid fa-spinner fa-spin"></i> 구글 시트 데이터를 동기화하는 중입니다...</td></tr>`;
+        
         try {
-            const response = await fetch(SPREADSHEET_CSV_URL);
+            const cacheBuster = "&t=" + new Date().getTime();
+            const response = await fetch(SPREADSHEET_CSV_URL + cacheBuster);
+            
+            if (!response.ok) throw new Error("네트워크 응답 오류");
+            
             const csvText = await response.text();
             const rawRows = parseCSV(csvText);
             
-            // 헤더 제거 (첫 번째 행 제외)
-            const headers = rawRows[0];
-            const rows = rawRows.slice(1);
-
-            // 오늘 날짜 셋업 (시스템 연동 기준값 보정)
-            const today = new Date();
-
-            // 집계용 변수 인스턴스 초기화
-            let todayNormal = 0, todayError = 0;
-            let weekNormal = 0, weekError = 0;
-            let monthNormal = 0, monthError = 0;
-            let lastStatus = "정상";
-            let tableHtml = "";
-
-            // 구글 시트 구조 매핑: [0]날짜, [1]시간, [2]접속방법, [3]상태, [4]점검내용, [5]성공율
-            rows.forEach((row, index) => {
-                if(row.length < 4) return;
-
-                const dateStr = row[0];
-                const statusStr = row[3];
-                const rateStr = row[5] || "100%";
-                const isNormal = (statusStr === "정상" || statusStr.includes("정상"));
-
-                const targetDate = getParsedDate(dateStr);
-
-                // 최신 데이터 1건의 점검 상태 추출
-                if (index === 0) {
-                    lastStatus = statusStr;
-                }
-
-                // 1. 당일(오늘) 누적 계산
-                if (isSameDay(targetDate, today)) {
-                    if (isNormal) todayNormal++; else todayError++;
-                }
-                // 2. 주간 누적 계산
-                if (isSameWeek(targetDate, today)) {
-                    if (isNormal) weekNormal++; else weekError++;
-                }
-                // 3. 월간 누적 계산
-                if (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() === today.getMonth()) {
-                    if (isNormal) monthNormal++; else monthError++;
-                }
-
-                // 테이블 동적 드로우 구성 (오늘 날짜 데이터 위주로 마킹 처리)
-                if (isSameDay(targetDate, today)) {
-                    const rowClass = isNormal ? "" : "style='background-color: #fdf2f2;'";
-                    const statusClass = isNormal ? "class='status-normal'" : "class='status-error'";
-                    tableHtml += `
-                        <tr ${rowClass}>
-                            <td>${row[0]}</td>
-                            <td>${row[1]}</td>
-                            <td>${row[2]}</td>
-                            <td ${statusClass}>${row[3]}</td>
-                            <td>${row[4]}</td>
-                            <td>${rateStr}</td>
-                        </tr>
-                    `;
-                }
-            });
-
-            // 렌더링할 오늘 이력이 없을 경우의 예외 테이블 처리
-            if (tableHtml === "") {
-                tableHtml = `<tr><td colspan="6" class="loading">오늘 기록된 점검 로그가 없습니다.</td></tr>`;
+            if (rawRows.length === 0) {
+                document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:orange;"><i class="fa-solid fa-triangle-exclamation"></i> 시트에 데이터가 존재하지 않습니다.</td></tr>`;
+                return;
             }
-            document.getElementById('log-tbody').innerHTML = tableHtml;
 
-            // 상단 대시보드 스코어 메타보드 수치 갱신 반영
-            const todayTotal = todayNormal + todayError;
-            const todayRate = todayTotal > 0 ? Math.round((todayNormal / todayTotal) * 100) : 0;
-
-            document.getElementById('meta-status').innerText = lastStatus;
-            document.getElementById('meta-status').className = `value ${lastStatus.includes('정상') ? 'status-normal' : 'status-error'}`;
-            document.getElementById('meta-total').innerText = `${todayTotal} 건`;
-            document.getElementById('meta-normal').innerText = `${todayNormal} 건`;
-            document.getElementById('meta-error').innerText = `${todayError} 건`;
-            document.getElementById('meta-rate').innerText = `${todayRate}%`;
-
-            // 각각의 성공율 산출식 대입
-            const weekTotal = weekNormal + weekError;
-            const weekRate = weekTotal > 0 ? Math.round((weekNormal / weekTotal) * 100) : 0;
-
-            const monthTotal = monthNormal + monthError;
-            const monthRate = monthTotal > 0 ? Math.round((monthNormal / monthTotal) * 100) : 0;
-
-            // 동적 차트 갱신 렌더링 호출
-            updateDoughnutChart('today', 'todayAccumChart', ['정상', '오류'], [todayNormal, todayError], `오늘 성공율: ${todayRate}%`);
-            updateDoughnutChart('week', 'weekChart', ['정상', '오류'], [weekNormal, weekError], `이번주 성공율: ${weekRate}%`);
-            updateDoughnutChart('month', 'monthChart', ['정상', '오류'], [monthNormal, monthError], `이번달 성공율: ${monthRate}%`);
+            globalCachedRows = rawRows;
+            renderDashboard(globalCachedRows);
 
         } catch (error) {
             console.error("데이터 동기화 실패:", error);
-            document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:red;"><i class="fa-solid fa-circle-xmark"></i> 시트 연동 중 에러가 발생했습니다. 개발자 콘솔을 확인하세요.</td></tr>`;
+            document.getElementById('log-tbody').innerHTML = `<tr><td colspan="6" class="loading" style="color:red;"><i class="fa-solid fa-circle-xmark"></i> 시트 연동 실패 또는 데이터 오류가 발생했습니다.</td></tr>`;
         }
     }
 
-    // 도큐먼트 로드 완료 시 구글 드라이브 시트 호출 시작
     window.addEventListener('DOMContentLoaded', fetchDashboardData);
 </script>
 </body>
